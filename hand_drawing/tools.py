@@ -1,9 +1,10 @@
 import cv2
 from time import time
 import utils
+from abc import ABC, abstractmethod
 
 
-class Tool:
+class Tool(ABC):
 
     def __init__(self, position, box_dim, curr_thickness):
         self.box_dim = box_dim
@@ -32,6 +33,10 @@ class Tool:
             2,
         )
 
+    @abstractmethod
+    def use(self, *args, **kwargs):
+        pass
+
 
 class Brush(Tool):
 
@@ -55,6 +60,12 @@ class Brush(Tool):
         self.curr_color_idx = 0
         self.click_start = None
         self.change_triggered = False
+
+    def current_color(self):
+        return self.colors[self.curr_color_idx]
+
+    def add_to_screen(self, frame):
+        super().add_to_screen(frame, color=self.current_color())
 
     def change_color(self, index, middle):
         if (
@@ -97,6 +108,19 @@ class Brush(Tool):
         else:
             self.prev_tool_pos = None
 
+    def use(self, canvas, frame, landmarks, **kwargs):
+        threshold = kwargs.get("threshold", 50)
+        alpha = kwargs.get("alpha", 0.4)
+        self.paint(
+            canvas,
+            frame,
+            landmarks["thumb"],
+            landmarks["index"],
+            threshold=threshold,
+            alpha=alpha,
+        )
+        self.change_color(landmarks["index"], landmarks["middle"])
+
 
 class Eraser(Tool):
     def __init__(self, position=(50, 30), box_dim=(40, 120), curr_thickness=0.2):
@@ -117,3 +141,7 @@ class Eraser(Tool):
             self.prev_tool_pos = index
         else:
             self.prev_tool_pos = None
+
+    def use(self, canvas, frame, landmarks, **kwargs):
+        threshold = kwargs.get("threshold", 50)
+        self.erase(canvas, landmarks["thumb"], landmarks["index"], threshold=threshold)
