@@ -1,5 +1,6 @@
 import cv2
-from utils import Gestures
+from virtualpainter.utils import Gestures
+from tools import ToolLike
 
 gestures = Gestures()
 
@@ -11,6 +12,12 @@ class ToolsManager:
         self.toolbox = toolbox
         self.curr_tool_idx = 0
         self.position = (500, 30)
+
+    def add_tool(self, tool):
+        assert isinstance(
+            tool, ToolLike
+        ), f"tool to be appended must be of type {ToolLike}"
+        self.toolbox.append(tool)
 
     def add_to_screen(self, frame):
         for tool in self.toolbox:

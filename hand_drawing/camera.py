@@ -1,8 +1,8 @@
 import cv2
-from hand_detection import HandDetector
-import tools
+from virtualpainter.hand_detection import HandDetector
+import virtualpainter.tools as tools
 import numpy as np
-from tools_manager import ToolsManager
+from virtualpainter.tools_manager import ToolsManager
 
 cam_width, cam_height = 960, 1080
 
@@ -13,7 +13,7 @@ cap.set(4, cam_height)
 hand_detector = HandDetector(detection_confidence=0.8, tracking_confidence=0.9)
 tool_manager = ToolsManager(
     [
-        tools.ColorTool(position=(50, 120)),
+        tools.Brush(position=(50, 120)),
         tools.Eraser(position=(50, 50)),
         tools.Save(position=(500, 50)),
     ]

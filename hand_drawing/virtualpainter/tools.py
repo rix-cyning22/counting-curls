@@ -1,9 +1,12 @@
 import cv2
-import utils
+from virtualpainter import utils
 from abc import ABC, abstractmethod
 from PIL import Image
 import tkinter as tk
 from tkinter import filedialog
+from typing import List, Union
+
+ToolLike = Union["Tool", "Brush", "Eraser", "Save"]
 
 
 class Tool(ABC):
@@ -118,7 +121,7 @@ class Adjustable(Tool):
         self.change_thickness(frame, landmarks, **kwargs)
 
 
-class ColorTool(Adjustable):
+class Brush(Adjustable):
     def __init__(
         self,
         position,
@@ -148,7 +151,7 @@ class ColorTool(Adjustable):
         if self.gestures.two_finger_hold(
             index,
             middle,
-            self.position,
+            (self.position[0], self.position[1] - self.box_dim[0]),
             (self.position[0] + self.box_dim[1], self.position[1]),
         ):
             self.curr_color_idx = (self.curr_color_idx + 1) % len(self.colors)
@@ -182,8 +185,8 @@ class Save(Tool):
         if self.gestures.two_finger_hold(
             index,
             middle,
-            self.position,
-            (self.position[0] + self.box_dim[1], self.position[1] + self.box_dim[0]),
+            (self.position[0], self.position[1] - self.box_dim[0]),
+            (self.position[0] + self.box_dim[1], self.position[1]),
         ):
             root = tk.Tk()
             root.withdraw()
