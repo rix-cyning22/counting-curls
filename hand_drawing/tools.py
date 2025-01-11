@@ -1,17 +1,16 @@
 import cv2
-from time import time
 import utils
 from abc import ABC, abstractmethod
+from PIL import Image
+import tkinter as tk
+from tkinter import filedialog
 
 
 class Tool(ABC):
-
-    def __init__(self, position, box_dim, curr_thickness):
+    def __init__(self, position, gestures, box_dim=(40, 120)):
         self.box_dim = box_dim
-        self.max_thickness = 100
         self.position = position
-        self.curr_thickness = curr_thickness
-        self.prev_tool_pos = None
+        self.gestures = utils.Gestures()
 
     def add_to_screen(self, frame, color=None):
         if color is None:
@@ -38,12 +37,92 @@ class Tool(ABC):
         pass
 
 
-class Brush(Tool):
+class Adjustable(Tool):
+    def __init__(self, position, box_dim=(40, 120), curr_thickness=0.2):
+        super().__init__(position, box_dim)
+        self.curr_thickness = curr_thickness
+        self.max_thickness = 100
+        self.prev_pos = None
+        self.is_locked = False
+        self.thickness_before_locked = self.curr_thickness
 
+    def thicc(self, mode=None):
+        if mode == "pinch":
+            return int(self.max_thickness * self.thickness_before_locked)
+        elif mode == "max":
+            return self.max_thickness
+        return int(self.max_thickness * self.curr_thickness)
+
+    def change_thickness(self, frame, landmarks, color=(0, 0, 0)):
+        thumb = landmarks["thumb"]
+        middle = landmarks["middle"]
+        ring = landmarks["ring"]
+
+        if self.gestures.is_pinch(thumb, ring):
+            if not self.is_locked:
+                self.thickness_before_locked = self.curr_thickness
+            self.is_locked = True
+            distance = utils.distance(middle, thumb)
+            self.curr_thickness = max(0.05, min(1.0, distance / 160))
+            center = utils.midpoint(thumb, ring)
+            cv2.circle(frame, center, self.thicc(), color, cv2.FILLED)
+            cv2.circle(
+                frame, center, self.thicc(mode="pinch"), (255, 255, 255), cv2.FILLED
+            )
+            cv2.circle(frame, center, self.thicc(mode="max") + 5, color, 2)
+            cv2.putText(
+                frame,
+                f"{self.thicc()}",
+                (
+                    center[0] + self.thicc(mode="max") + 2,
+                    center[1] + self.thicc(mode="max") + 2,
+                ),
+                cv2.FONT_HERSHEY_PLAIN,
+                2,
+                color,
+                2,
+            )
+        else:
+            self.is_locked = False
+
+    def paint(self, canvas, frame, thumb, index, alpha=0.2, color=(0, 0, 0)):
+        if self.gestures.is_painting(thumb, index):
+            cv2.circle(frame, index, self.thicc() + 5, color, 2)
+            if self.prev_pos is None:
+                self.prev_pos = index
+            else:
+                center = utils.midpoint(index, thumb)
+                c = utils.smoothen(center, self.prev_pos, alpha=alpha)
+                cv2.line(canvas, self.prev_pos, c, color, self.thicc())
+            self.prev_pos = index
+        else:
+            self.prev_pos = None
+
+    def on_free(self, *args, **kwargs):
+        pass
+
+    def use(self, *args, **kwargs):
+        canvas = args[0]
+        frame = args[1]
+        landmarks = args[2]
+        if not self.is_locked:
+            alpha = kwargs.get("alpha", 0.4)
+            self.paint(
+                canvas,
+                frame,
+                landmarks["thumb"],
+                landmarks["index"],
+                alpha=alpha,
+            )
+            self.on_free(*args, **kwargs)
+        self.change_thickness(frame, landmarks, **kwargs)
+
+
+class ColorTool(Adjustable):
     def __init__(
         self,
+        position,
         box_dim=(40, 120),
-        position=(50, 80),
         colors=[
             (255, 0, 0),
             (0, 255, 0),
@@ -55,93 +134,66 @@ class Brush(Tool):
         ],
         curr_thickness=0.2,
     ):
-        super().__init__(position, box_dim, curr_thickness)
+        super().__init__(position, box_dim, curr_thickness=curr_thickness)
         self.colors = colors
         self.curr_color_idx = 0
-        self.click_start = None
-        self.change_triggered = False
 
-    def current_color(self):
+    def curr_color(self):
         return self.colors[self.curr_color_idx]
 
     def add_to_screen(self, frame):
-        super().add_to_screen(frame, color=self.current_color())
+        super().add_to_screen(frame, color=self.curr_color())
 
     def change_color(self, index, middle):
-        if (
-            middle[0] <= self.position[0] + self.box_dim[1]
-            and middle[0] >= self.position[0]
-            and middle[1] >= self.position[1] - self.box_dim[0]
-            and middle[1] <= self.position[1]
-            and index[0] >= self.position[0]
-            and index[0] <= self.position[0] + self.box_dim[1]
-            and index[1] <= self.position[1]
-            and index[1] >= self.position[1] - self.box_dim[0]
+        if self.gestures.two_finger_hold(
+            index,
+            middle,
+            self.position,
+            (self.position[0] + self.box_dim[1], self.position[1]),
         ):
-            if self.click_start is None:
-                self.click_start = time()
-            elapsed = time() - self.click_start
-            if elapsed >= 0.7 and not self.change_triggered:
-                self.change_triggered = True
-                self.curr_color_idx += 1
-                self.curr_color_idx %= len(self.colors)
-        else:
-            self.click_start = None
-            self.change_triggered = False
+            self.curr_color_idx = (self.curr_color_idx + 1) % len(self.colors)
 
-    def paint(self, canvas, frame, thumb, index, threshold=50, alpha=0.2):
-        if utils.distance(thumb, index) < threshold:
-            cv2.circle(frame, index, 80, self.colors[self.curr_color_idx], 2)
-            if self.prev_tool_pos is None:
-                self.prev_tool_pos = index
-            else:
-                cx = int((1 - alpha) * self.prev_tool_pos[0] + alpha * index[0])
-                cy = int((1 - alpha) * self.prev_tool_pos[1] + alpha * index[1])
-                cv2.line(
-                    canvas,
-                    self.prev_tool_pos,
-                    (cx, cy),
-                    self.colors[self.curr_color_idx],
-                    int(self.max_thickness * self.curr_thickness),
-                )
-            self.prev_tool_pos = index
-        else:
-            self.prev_tool_pos = None
+    def change_thickness(self, frame, landmarks):
+        super().change_thickness(frame, landmarks, self.curr_color())
 
-    def use(self, canvas, frame, landmarks, **kwargs):
-        threshold = kwargs.get("threshold", 50)
-        alpha = kwargs.get("alpha", 0.4)
-        self.paint(
-            canvas,
-            frame,
-            landmarks["thumb"],
-            landmarks["index"],
-            threshold=threshold,
-            alpha=alpha,
-        )
+    def paint(self, canvas, frame, thumb, index, alpha=0.2):
+        super().paint(canvas, frame, thumb, index, alpha, self.curr_color())
+
+    def on_free(self, *args):
+        landmarks = args[2]
         self.change_color(landmarks["index"], landmarks["middle"])
 
 
-class Eraser(Tool):
-    def __init__(self, position=(50, 30), box_dim=(40, 120), curr_thickness=0.2):
-        super().__init__(position, box_dim, curr_thickness)
+class Eraser(Adjustable):
+    def __init__(self, position, box_dim=(40, 120), curr_thickness=0.2):
+        super().__init__(position, box_dim, curr_thickness=curr_thickness)
 
-    def erase(self, canvas, thumb, index, threshold=50):
-        if utils.distance(thumb, index) < threshold:
-            if self.prev_tool_pos is None:
-                self.prev_tool_pos = index
-            else:
-                cv2.line(
-                    canvas,
-                    self.prev_tool_pos,
-                    utils.midpoint(thumb, index),
-                    (0, 0, 0),
-                    int(self.max_thickness * self.curr_thickness),
-                )
-            self.prev_tool_pos = index
-        else:
-            self.prev_tool_pos = None
 
-    def use(self, canvas, frame, landmarks, **kwargs):
-        threshold = kwargs.get("threshold", 50)
-        self.erase(canvas, landmarks["thumb"], landmarks["index"], threshold=threshold)
+class Save(Tool):
+    def __init__(self, position, box_dim=(40, 120)):
+        super().__init__(position, box_dim)
+
+    def use(self, *args):
+        canvas = args[0]
+        landmarks = args[2]
+        middle = landmarks["middle"]
+        index = landmarks["index"]
+
+        if self.gestures.two_finger_hold(
+            index,
+            middle,
+            self.position,
+            (self.position[0] + self.box_dim[1], self.position[1] + self.box_dim[0]),
+        ):
+            root = tk.Tk()
+            root.withdraw()
+            file_path = filedialog.asksaveasfilename(
+                defaultextension=".png",
+                filetypes=[("PNG files", "*.png"), ("All files", "*.*")],
+                title="Save Canvas",
+            )
+            root.destroy()
+            if file_path:
+                canvas = 255 - canvas
+                img = Image.fromarray(canvas)
+                img.save(file_path)

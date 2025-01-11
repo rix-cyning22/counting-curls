@@ -11,9 +11,13 @@ cap.set(3, cam_width)
 cap.set(4, cam_height)
 
 hand_detector = HandDetector(detection_confidence=0.8, tracking_confidence=0.9)
-brush = tools.Brush()
-eraser = tools.Eraser()
-tool_manager = ToolsManager([brush, eraser])
+tool_manager = ToolsManager(
+    [
+        tools.ColorTool(position=(50, 120)),
+        tools.Eraser(position=(50, 50)),
+        tools.Save(position=(500, 50)),
+    ]
+)
 
 canvas = np.zeros((cam_height // 2, cam_width, 3), np.uint8)
 

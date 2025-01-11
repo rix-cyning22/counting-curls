@@ -1,6 +1,5 @@
 from mediapipe.python.solutions import hands, drawing_utils
 import cv2
-from dataclasses import dataclass
 
 
 class HandDetector:

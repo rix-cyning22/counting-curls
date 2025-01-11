@@ -1,5 +1,7 @@
 import cv2
-from time import time
+from utils import Gestures
+
+gestures = Gestures()
 
 
 class ToolsManager:
@@ -28,13 +30,21 @@ class ToolsManager:
 
     def check_finger_position(self, index, thumb):
         for idx, tool in enumerate(self.toolbox):
-            is_index_in_tool = (
-                tool.position[0] <= index[0] <= tool.position[0] + tool.box_dim[1]
-                and tool.position[1] - tool.box_dim[0] <= index[1] <= tool.position[1]
+            is_index_in_tool = gestures.is_hovering(
+                index,
+                tool.position,
+                (
+                    tool.position[0] + tool.box_dim[1],
+                    tool.position[1] + tool.box_dim[0],
+                ),
             )
-            is_thumb_outside_tool = not (
-                tool.position[0] <= thumb[0] <= tool.position[0] + tool.box_dim[1]
-                and tool.position[1] - tool.box_dim[0] <= thumb[1] <= tool.position[1]
+            is_thumb_outside_tool = not gestures.is_hovering(
+                thumb,
+                tool.position,
+                (
+                    tool.position[0] + tool.box_dim[1],
+                    tool.position[1] + tool.box_dim[0],
+                ),
             )
 
             if is_index_in_tool and is_thumb_outside_tool:

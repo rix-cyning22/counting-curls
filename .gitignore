@@ -1,3 +1,4 @@
 .env
 pose/
 __pycache__/
+*.png
