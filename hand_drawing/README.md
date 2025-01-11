@@ -100,11 +100,3 @@ camera.py              # Main application script
 requirements.txt       # Python dependencies
 README.md              # Project documentation
 ```
-
-## Contribution
-
-We welcome contributions to enhance the functionality and usability of Virtual Painter. If you have ideas for new tools or features, feel free to submit a pull request or open an issue.
-
-## License
-
-This project is licensed under the MIT License.
