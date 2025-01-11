@@ -95,9 +95,10 @@ virtual-painter/
 ├── tools.py               # Contains tool implementations (Brush, Eraser, Save)
 ├── tools_manager.py       # Manages the tools and their interactions
 ├── hand_detection.py      # Hand detection and tracking logic
-├── camera.py              # Main application script
-├── requirements.txt       # Python dependencies
-└── README.md              # Project documentation
+└── utils.py               # Functions to implement tools
+camera.py              # Main application script
+requirements.txt       # Python dependencies
+README.md              # Project documentation
 ```
 
 ## Contribution
